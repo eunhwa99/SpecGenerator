@@ -1,0 +1,113 @@
+import org.asciidoctor.gradle.jvm.AsciidoctorTask
+
+tasks.bootJar {
+    enabled = false
+}
+
+tasks.jar {
+    enabled = true
+}
+
+configurations {
+    asciidoctorExt
+}
+
+dependencies {
+    asciidoctorExt 'org.springframework.restdocs:spring-restdocs-asciidoctor'
+}
+
+// 1단계: 스니펫 복사 및 index.adoc 생성
+tasks.register('prepareAsciidoc') {
+    dependsOn ':adapter-inbound:test'
+
+    def snippetsRoot = file("../adapter-inbound/build/generated-snippets")
+    def snippetsDir = layout.buildDirectory.dir("snippets").get().asFile
+    def generatedIndex = new File(snippetsDir, "index.adoc")
+
+    inputs.dir snippetsRoot
+    outputs.file generatedIndex
+    outputs.dir snippetsDir
+
+    doLast {
+        println "=== Preparing AsciiDoc sources ==="
+
+        if (!snippetsRoot.exists()) {
+            throw new GradleException("Snippets directory not found: ${snippetsRoot.absolutePath}")
+        }
+
+        // 스니펫 복사
+        copy {
+            from snippetsRoot
+            into snippetsDir
+        }
+
+        // index.adoc 생성
+        def content = new StringBuilder()
+        content << "= API Documentation\n"
+        content << ":toc: left\n"
+        content << ":toclevels: 3\n"
+        content << ":sectnums:\n"
+        content << ":backend: html5\n\n"
+        content << "== API Reference\n\n"
+
+        // 2단계 디렉토리 구조 처리
+        snippetsRoot.listFiles()
+                ?.findAll { it.isDirectory() }
+                ?.each { categoryDir ->
+                    content << "=== ${categoryDir.name.capitalize()}\n\n"
+
+                    // 각 카테고리 안의 서브 디렉토리들 처리
+                    categoryDir.listFiles()
+                            ?.findAll { it.isDirectory() }
+                            ?.sort { it.name }
+                            ?.each { apiDir ->
+                                content << "==== ${apiDir.name.capitalize()}\n\n"
+
+                                // 각 스니펫 파일들을 순서대로 포함
+                                def snippetOrder = [
+                                        'curl-request.adoc': 'Curl Request',
+                                        'request-headers.adoc': 'Request headers',
+                                        'request-fields.adoc': 'Request body',
+                                        'path-parameters.adoc': 'Path Parameters',
+                                        'request-parameters.adoc': 'Request Parameters',
+                                        'http-response.adoc': 'HTTP Response',
+                                ]
+
+                                snippetOrder.each { fileName, title ->
+                                    def snippetFile = new File(apiDir, fileName)
+                                    if (snippetFile.exists()) {
+                                        content << "===== ${title}\n\n"
+                                        content << "include::{snippets}/${categoryDir.name}/${apiDir.name}/${fileName}[]\n\n"
+                                    }
+                                }
+                            }
+                    content << "\n"
+                }
+
+        generatedIndex.parentFile.mkdirs()
+        generatedIndex.text = content.toString()
+
+        println "Generated index.adoc with ${content.length()} characters"
+    }
+}
+// 2단계: HTML 생성
+tasks.register('generateDocs', AsciidoctorTask) {
+    dependsOn 'prepareAsciidoc'
+
+    configurations 'asciidoctorExt'
+
+    def snippetsDir = layout.buildDirectory.dir("snippets").get().asFile
+    def outputDir = layout.buildDirectory.dir("docs-html").get().asFile
+
+    sourceDir = snippetsDir
+    sources {
+        include '**/*.adoc'
+    }
+
+    inputs.dir snippetsDir
+    outputs.dir outputDir
+
+    attributes([
+            'snippets': snippetsDir.absolutePath
+    ])
+}
