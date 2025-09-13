@@ -41,6 +41,7 @@ jobs:
           cp docs/build/docs/asciidocGenerateDocs/index.html .
           git add .
           git commit -m "Update API documentation [skip ci]" || echo "No changes to commit"
+          git remote set-url origin https://x-access-token:${GITHUB_TOKEN}@github.com/eunhwa99/SpecGenerator.git
           git push -u origin docs --force
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
