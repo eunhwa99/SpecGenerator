@@ -38,7 +38,7 @@ jobs:
       - name: Commit and push generated docs
         run: |
           git checkout -B docs
-          cp -r docs/build/docs-html/* .
+          cp -r docs/build/asciidocGenerateDocs/docs-html/* .
           git add .
           git commit -m "Update API documentation [skip ci]" || echo "No changes to commit"
           git push -u origin docs --force
