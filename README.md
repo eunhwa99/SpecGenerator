@@ -12,4 +12,4 @@
 3. GitHub Actions가 자동으로 문서 생성 및 배포
 
 ## 📅 마지막 업데이트
-Sun Sep 14 13:50:09 UTC 2025
+Sun Sep 14 13:53:12 UTC 2025
