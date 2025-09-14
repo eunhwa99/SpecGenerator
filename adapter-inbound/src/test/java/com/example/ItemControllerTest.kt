@@ -11,7 +11,6 @@ import org.springframework.http.MediaType
 import org.springframework.restdocs.RestDocumentationContextProvider
 import org.springframework.restdocs.RestDocumentationExtension
 import org.springframework.restdocs.cli.CliDocumentation.curlRequest
-import org.springframework.restdocs.headers.HeaderDocumentation.headerWithName
 import org.springframework.restdocs.headers.HeaderDocumentation.requestHeaders
 import org.springframework.restdocs.http.HttpDocumentation.httpResponse
 import org.springframework.restdocs.mockmvc.MockMvcRestDocumentation.document
@@ -19,9 +18,11 @@ import org.springframework.restdocs.mockmvc.MockMvcRestDocumentation.documentati
 import org.springframework.restdocs.mockmvc.RestDocumentationRequestBuilders.*
 import org.springframework.restdocs.operation.preprocess.Preprocessors.*
 import org.springframework.restdocs.payload.PayloadDocumentation.*
+import org.springframework.restdocs.payload.RequestFieldsSnippet
+import org.springframework.restdocs.request.PathParametersSnippet
 import org.springframework.restdocs.request.RequestDocumentation.parameterWithName
 import org.springframework.restdocs.request.RequestDocumentation.pathParameters
-import org.springframework.restdocs.snippet.Attributes.key
+import org.springframework.restdocs.snippet.Snippet
 import org.springframework.test.web.servlet.MockMvc
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
 import org.springframework.test.web.servlet.setup.DefaultMockMvcBuilder
@@ -45,45 +46,69 @@ class ItemControllerTest {
     companion object {
         // 공통 Request/Response 필드 템플릿
         val itemResponseFields = responseFields(
-            fieldWithPath("[].id").description("아이템 ID"),
-            fieldWithPath("[].name").description("아이템 이름"),
-            fieldWithPath("[].price").description("아이템 가격"),
-            fieldWithPath("[].createdAt").description("생성 일시").optional(),
-            fieldWithPath("[].updatedAt").description("수정 일시").optional()
+            bodyField("[].id", "아이템 ID", "Long", "Generated ID"),
+            bodyField(path = "[].name", description = "아이템 이름", constraints = "1-100 characters"),
+            bodyField(
+                path = "[].price",
+                description = "아이템 가격",
+                type = "Integer",
+                constraints = "Positive number"
+            ),
+            bodyField(
+                path = "[].createdAt",
+                description = "생성 일시",
+                "LocalDateTime",
+                "",
+                optional = true
+            ),
+            bodyField(
+                path = "[].updatedAt",
+                description = "수정 일시",
+                "LocalDateTime",
+                "",
+                optional = true
+            )
         )
+
 
         val itemResponseField = responseFields(
-            fieldWithPath("id").description("아이템 ID"),
-            fieldWithPath("name").description("아이템 이름"),
-            fieldWithPath("price").description("아이템 가격"),
-            fieldWithPath("createdAt").description("생성 일시").optional(),
-            fieldWithPath("updatedAt").description("수정 일시").optional()
+            bodyField("id", "아이템 ID", "Long", "Generated ID"),
+            bodyField(path = "name", description = "아이템 이름", constraints = "1-100 characters"),
+            bodyField(
+                "price", description = "아이템 가격",
+                type = "Integer",
+                constraints = "Positive number"
+            ),
+            bodyField(
+                "createdAt", description = "생성 일시",
+                "LocalDateTime",
+                "",
+                optional = true
+            ),
+            bodyField(
+                "updatedAt", description = "수정 일시",
+                "LocalDateTime",
+                "",
+                optional = true
+            )
         )
 
-        val createItemRequestFields = requestFields().apply {
-            fieldWithPath("name")
-                .description("아이템 이름 (필수, 1-100자)")
-                .attributes(key("constraints").value("Required, 1-100 characters"))
-            fieldWithPath("price")
-                .description("아이템 가격 (필수, 0보다 큰 값)")
-                .attributes(key("constraints").value("Positive number"))
-        }
-
-        val itemRequestBody = relaxedRequestFields(
-            fieldWithPath("name")
-                .description("아이템 이름 (필수, 1-100자)")
-                .attributes(
-                    key("type").value("String"),
-                    key("constraints").value("Required, 1-100 characters"),
-                    key("optional").value(false)
-                ),
-            fieldWithPath("price")
-                .description("아이템 가격 (필수, 0보다 큰 값)")
-                .attributes(
-                    key("type").value("Integer"),
-                    key("constraints").value("Positive number"),
-                    key("optional").value(true)
-                )
+        // ------------------ Request Fields ------------------
+        val itemRequestBody: RequestFieldsSnippet = requestFields(
+            bodyField(
+                "name",
+                "아이템 이름 (필수, 1-100자)",
+                "String",
+                "Required, 1-100 characters",
+                optional = false
+            ),
+            bodyField(
+                "price",
+                "아이템 가격 (필수, 0보다 큰 값)",
+                "Integer",
+                "Positive number",
+                optional = true
+            )
         )
 
         val errorFields = responseFields(
@@ -92,6 +117,15 @@ class ItemControllerTest {
             fieldWithPath("error").description("에러 타입"),
             fieldWithPath("message").description("에러 메시지"),
             fieldWithPath("path").description("요청 경로")
+        )
+
+        val headers = requestHeaders(
+            headerField("x-custom-header", "커스텀 헤더", "String", "필수", false)
+        )
+        val pathParams: PathParametersSnippet = pathParameters(
+            pathParam(
+                "id", "아이템 ID", "Long", "Required", true
+            )
         )
     }
 
@@ -109,6 +143,13 @@ class ItemControllerTest {
             .build()
     }
 
+    private fun documentAuto(snippetName: String, vararg extraSnippets: Snippet) =
+        document(
+            snippetName,
+            preprocessRequest(prettyPrint()),
+            preprocessResponse(prettyPrint()),
+            *extraSnippets
+        )
     // ============= CREATE ITEM =============
 
     @Test
@@ -124,9 +165,8 @@ class ItemControllerTest {
         )
             .andExpect(status().isCreated)
             .andDo(
-                document(
+                documentAuto(
                     "items/create", // 기본 요청 정보
-                    preprocessRequest(prettyPrint()),
                     itemRequestBody
                 )
             )
@@ -145,9 +185,9 @@ class ItemControllerTest {
         )
             .andExpect(status().isCreated)
             .andDo(
-                document(
+                documentAuto(
                     "items/create/201-response",
-                    preprocessResponse(prettyPrint()),
+                    itemRequestBody
                 )
             )
     }
@@ -163,9 +203,9 @@ class ItemControllerTest {
         )
             .andExpect(status().isBadRequest)
             .andDo(
-                document(
+                documentAuto(
                     "items/create/400-response",
-                    preprocessResponse(prettyPrint()),
+                    itemRequestBody,
                 )
             )
     }
@@ -181,18 +221,9 @@ class ItemControllerTest {
         )
             .andExpect(status().isOk)
             .andDo(
-                document(
+                documentAuto(
                     "items/get-all",
-                    preprocessRequest(prettyPrint()),
-                    requestHeaders(
-                        headerWithName("X-Custom-Header")
-                            .description("커스텀 헤더")
-                            .attributes(
-                                key("type").value("String"),
-                                key("constraints").value("필수"),
-                                key("optional").value("false")
-                            )
-                    ),
+                    headers,
                     itemResponseFields
                 )
             )
@@ -208,10 +239,9 @@ class ItemControllerTest {
         )
             .andExpect(status().isOk)
             .andDo(
-                document(
+                documentAuto(
                     "items/get-by-id",
-                    preprocessRequest(prettyPrint()),
-                    pathParameters(parameterWithName("id").description("조회할 아이템의 ID"))
+                    pathParams
                 )
             )
     }
@@ -225,9 +255,8 @@ class ItemControllerTest {
         )
             .andExpect(status().isNotFound)
             .andDo(
-                document(
+                documentAuto(
                     "items/get-by-id/404-response",
-                    preprocessResponse(prettyPrint()),
                 )
             )
     }
@@ -247,9 +276,8 @@ class ItemControllerTest {
         )
             .andExpect(status().isOk)
             .andDo(
-                document(
+                documentAuto(
                     "items/search",
-                    preprocessRequest(prettyPrint()),
                     pathParameters().apply {
                         parameterWithName("name").description("아이템 이름 검색 키워드").optional()
                         parameterWithName("minPrice").description("최소 가격").optional()
@@ -261,10 +289,10 @@ class ItemControllerTest {
             )
     }
 
-   // @Test
+    @Test
     fun `GET items with query params - 200 Success Response`() {
         mockMvc.perform(
-            get("/api/items/search")
+            get("/api/items")
                 .param("name", "item")
                 .param("minPrice", "100")
                 .param("maxPrice", "500")
@@ -274,9 +302,8 @@ class ItemControllerTest {
         )
             .andExpect(status().isOk)
             .andDo(
-                document(
+                documentAuto(
                     "items/search/200-response",
-                    preprocessResponse(prettyPrint()),
                     itemResponseFields
                 )
             )
@@ -296,9 +323,8 @@ class ItemControllerTest {
         )
             .andExpect(status().isOk)
             .andDo(
-                document(
+                documentAuto(
                     "items/update/200-response",
-                    preprocessResponse(prettyPrint()),
                 )
             )
     }
@@ -316,9 +342,8 @@ class ItemControllerTest {
         )
             .andExpect(status().isNotFound)
             .andDo(
-                document(
+                documentAuto(
                     "items/update/404-response",
-                    preprocessResponse(prettyPrint())
                 )
             )
     }
@@ -330,10 +355,9 @@ class ItemControllerTest {
         mockMvc.perform(delete("/api/items/{id}", 1))
             .andExpect(status().isNoContent)
             .andDo(
-                document(
+                documentAuto(
                     "items/delete",
-                    preprocessRequest(prettyPrint()),
-                    pathParameters(parameterWithName("id").description("삭제할 아이템의 ID"))
+                    pathParams
                 )
             )
     }
@@ -343,9 +367,8 @@ class ItemControllerTest {
         mockMvc.perform(delete("/api/items/{id}", 1))
             .andExpect(status().isNoContent)
             .andDo(
-                document(
+                documentAuto(
                     "items/delete/204-response",
-                    preprocessResponse(prettyPrint())
                 )
             )
     }
@@ -355,10 +378,8 @@ class ItemControllerTest {
         mockMvc.perform(delete("/api/items/{id}/11", 999))
             .andExpect(status().isNotFound)
             .andDo(
-                document(
-                    "items/delete/404-response",
-                    preprocessResponse(prettyPrint()),
-
+                documentAuto(
+                    "items/delete/404-response"
                 )
             )
     }

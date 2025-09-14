@@ -79,11 +79,12 @@ tasks.register('prepareAsciidoc') {
     }
 }
 
-def addCommonRequestInfo(content, categoryDir, apiDir) {
+static def addCommonRequestInfo(content, categoryDir, apiDir) {
     def requestSnippets = [
             'curl-request.adoc': 'Request Example',
             'http-request.adoc': 'HTTP Request',
-            'request-fields.adoc': 'Request Fields',
+            'request-headers.adoc': 'Request Headers',
+            'request-fields.adoc': 'Request Body',
             'path-parameters.adoc': 'Path Parameters',
             'request-parameters.adoc': 'Query Parameters'
     ]
@@ -134,10 +135,11 @@ def addResponseTabs(content, categoryDir, apiDir) {
     }
 }
 
-def getStatusText(String code) {
+static def getStatusText(String code) {
     def statusTexts = [
             '200': 'OK',
             '201': 'Created',
+            '204': 'No Content',
             '400': 'Bad Request',
             '401': 'Unauthorized',
             '404': 'Not Found',
@@ -146,7 +148,7 @@ def getStatusText(String code) {
     return statusTexts[code] ?: 'Unknown'
 }
 
-def formatName(String name) {
+static def formatName(String name) {
     return name.replaceAll('-', ' ')
             .split(' ')
             .collect { it.capitalize() }

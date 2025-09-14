@@ -1,16 +1,18 @@
 package com.example
 
-import org.springframework.restdocs.headers.HeaderDocumentation.*
+import org.springframework.restdocs.headers.HeaderDescriptor
+import org.springframework.restdocs.headers.HeaderDocumentation.headerWithName
 import org.springframework.restdocs.payload.FieldDescriptor
-import org.springframework.restdocs.payload.PayloadDocumentation.*
-import org.springframework.restdocs.request.RequestDocumentation.*
+import org.springframework.restdocs.payload.PayloadDocumentation.fieldWithPath
+import org.springframework.restdocs.request.ParameterDescriptor
+import org.springframework.restdocs.request.RequestDocumentation.parameterWithName
 import org.springframework.restdocs.snippet.Attributes.key
 
 // --------- Body Fields DSL ---------
 data class DocField(
     val path: String,
     val description: String,
-    val type: String,
+    val type: String = "String",
     val constraints: String,
     val optional: Boolean = false
 ) {
@@ -24,25 +26,25 @@ data class DocField(
             )
 }
 
-// helper 함수: 간단하게 DSL처럼 사용
+// helper 함수
 fun bodyField(
     path: String,
     description: String,
-    type: String,
+    type: String = "String",
     constraints: String,
     optional: Boolean = false
 ) = DocField(path, description, type, constraints, optional).toFieldDescriptor()
 
-// --------- Header Fields DSL ---------
+// --------- Header Fields ---------
 data class HeaderField(
-    val name: String,
+    val path: String,
     val description: String,
     val type: String = "String",
     val constraints: String = "",
     val optional: Boolean = false
 ) {
-    fun toHeaderDescriptor() =
-        headerWithName(name)
+    fun toHeaderDescriptor(): HeaderDescriptor =
+        headerWithName(path)
             .description(description)
             .attributes(
                 key("type").value(type),
@@ -52,49 +54,61 @@ data class HeaderField(
 }
 
 fun headerField(
-    name: String,
+    path: String,
     description: String,
     type: String = "String",
     constraints: String = "",
     optional: Boolean = false
-) = HeaderField(name, description, type, constraints, optional).toHeaderDescriptor()
+) = HeaderField(path, description, type, constraints, optional).toHeaderDescriptor()
 
-// --------- Path Parameters DSL ---------
+// --------- Path Parameters  ---------
 data class PathParamField(
-    val name: String,
+    val path: String,
     val description: String,
-    val optional: Boolean = false
+    val type: String = "String",
+    val constraints: String = "",
+    val optional: Boolean = true
 ) {
-    fun toParamDescriptor() =
-        parameterWithName(name)
+    fun toParamDescriptor(): ParameterDescriptor =
+        parameterWithName(path)
             .description(description)
             .attributes(
+                key("type").value(type),
+                key("constraints").value(constraints),
                 key("optional").value(optional)
             )
 }
 
 fun pathParam(
-    name: String,
+    path: String,
     description: String,
-    optional: Boolean = false
-) = PathParamField(name, description, optional).toParamDescriptor()
+    type: String = "String",
+    constraints: String = "",
+    optional: Boolean = true
+) = PathParamField(path, description, type, constraints, optional).toParamDescriptor()
 
-// --------- Query Parameters DSL ---------
+// --------- Query Parameters  ---------
 data class QueryParamField(
-    val name: String,
+    val path: String,
     val description: String,
-    val optional: Boolean = false
+    val type: String = "String",
+    val constraints: String = "",
+    val optional: Boolean = true
 ) {
-    fun toParamDescriptor() =
-        parameterWithName(name)
+    fun toParamDescriptor(): ParameterDescriptor =
+        parameterWithName(path)
             .description(description)
             .attributes(
+                key("type").value(type),
+                key("constraints").value(constraints),
                 key("optional").value(optional)
             )
 }
 
 fun queryParam(
-    name: String,
+    path: String,
     description: String,
+    type: String = "String",
+    constraints: String = "",
     optional: Boolean = false
-) = QueryParamField(name, description, optional).toParamDescriptor()
+) = QueryParamField(path, description, type, constraints, optional).toParamDescriptor()
