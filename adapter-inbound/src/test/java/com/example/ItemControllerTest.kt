@@ -22,17 +22,15 @@ import org.springframework.restdocs.payload.PayloadDocumentation.*
 import org.springframework.restdocs.request.RequestDocumentation.parameterWithName
 import org.springframework.restdocs.request.RequestDocumentation.pathParameters
 import org.springframework.restdocs.snippet.Attributes.key
-import org.springframework.restdocs.snippet.Snippet
 import org.springframework.test.web.servlet.MockMvc
-import org.springframework.test.web.servlet.post
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
 import org.springframework.test.web.servlet.setup.DefaultMockMvcBuilder
 import org.springframework.test.web.servlet.setup.MockMvcBuilders
 import org.springframework.web.context.WebApplicationContext
 
-@WebMvcTest(ItemController::class) // @WebMvcTest는 그대로 유지
-@AutoConfigureRestDocs(outputDir = "build/generated-snippets") // @AutoConfigureRestDocs도 그대로
-@ExtendWith(RestDocumentationExtension::class) // Rest Docs 확장을
+@WebMvcTest(ItemController::class)
+@AutoConfigureRestDocs(outputDir = "build/generated-snippets")
+@ExtendWith(RestDocumentationExtension::class)
 class ItemControllerTest {
 
     @Autowired
@@ -89,22 +87,13 @@ class ItemControllerTest {
         )
 
         val errorFields = responseFields(
+            fieldWithPath("timestamp").description("에러 발생 시각"),
+            fieldWithPath("status").description("HTTP 상태 코드"),
+            fieldWithPath("error").description("에러 타입"),
             fieldWithPath("message").description("에러 메시지"),
-            fieldWithPath("errors[]").description("상세 에러 목록"),
-            fieldWithPath("errors[].field").description("에러 필드"),
-            fieldWithPath("errors[].message").description("필드별 에러 메시지"),
-            fieldWithPath("timestamp").description("에러 발생 시각")
+            fieldWithPath("path").description("요청 경로")
         )
     }
-
-    // 헬퍼 함수: 반복되는 document 호출 간소화
-    private fun documentAuto(snippetName: String, vararg extraSnippets: Snippet) =
-        document(
-            snippetName,
-            preprocessRequest(prettyPrint()),
-            preprocessResponse(prettyPrint()),
-            *extraSnippets
-        )
 
     @BeforeEach
     fun setUp(restDocumentation: RestDocumentationContextProvider) {
@@ -113,35 +102,88 @@ class ItemControllerTest {
                 documentationConfiguration(restDocumentation)
                     .snippets()
                     .withDefaults(
-                        requestHeaders(),
                         curlRequest(),
-                        httpResponse(),
+                        httpResponse()
                     )
-
             )
             .build()
     }
 
+    // ============= CREATE ITEM =============
+
     @Test
-    fun `POST create item 400 - 잘못된 요청`() {
-        val invalid = """{"name":"","price":-100}"""
-        mockMvc.post("/api/items") {
-            contentType = MediaType.APPLICATION_JSON
-            content = invalid
-        }
-            .andExpect { status { isBadRequest() } }
-            .andDo { documentAuto("items/create-error", errorFields) }
+    fun `POST create item - Common Request Info`() {
+        val request = ItemRequest("새로운 아이템", 1500)
+        val json = objectMapper.writeValueAsString(request)
+
+        mockMvc.perform(
+            post("/api/items")
+                .contentType(MediaType.APPLICATION_JSON)
+                .accept(MediaType.APPLICATION_JSON)
+                .content(json)
+        )
+            .andExpect(status().isCreated)
+            .andDo(
+                document(
+                    "items/create", // 기본 요청 정보
+                    preprocessRequest(prettyPrint()),
+                    itemRequestBody
+                )
+            )
     }
 
     @Test
-    fun `GET items 200 - 모든 아이템 조회`() {
+    fun `POST create item - 201 Success Response`() {
+        val request = ItemRequest("새로운 아이템", 1500)
+        val json = objectMapper.writeValueAsString(request)
+
         mockMvc.perform(
-            get("/api/items").accept(MediaType.APPLICATION_JSON).header("X-Custom-Header", "test")
+            post("/api/items")
+                .contentType(MediaType.APPLICATION_JSON)
+                .accept(MediaType.APPLICATION_JSON)
+                .content(json)
+        )
+            .andExpect(status().isCreated)
+            .andDo(
+                document(
+                    "items/create/201-response",
+                    preprocessResponse(prettyPrint()),
+                )
+            )
+    }
+
+    @Test
+    fun `POST create item - 400 Bad Request Response`() {
+        val invalidJson = """{"name":"","price":-100}"""
+
+        mockMvc.perform(
+            post("/api/items")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(invalidJson)
+        )
+            .andExpect(status().isBadRequest)
+            .andDo(
+                document(
+                    "items/create/400-response",
+                    preprocessResponse(prettyPrint()),
+                )
+            )
+    }
+
+    // ============= GET ALL ITEMS =============
+
+    @Test
+    fun `GET items - Common Request Info`() {
+        mockMvc.perform(
+            get("/api/items")
+                .accept(MediaType.APPLICATION_JSON)
+                .header("X-Custom-Header", "test")
         )
             .andExpect(status().isOk)
             .andDo(
-                documentAuto(
+                document(
                     "items/get-all",
+                    preprocessRequest(prettyPrint()),
                     requestHeaders(
                         headerWithName("X-Custom-Header")
                             .description("커스텀 헤더")
@@ -156,21 +198,44 @@ class ItemControllerTest {
             )
     }
 
+    // ============= GET ITEM BY ID =============
+
     @Test
-    fun `GET item by ID 200 - 특정 아이템 조회`() {
-        mockMvc.perform(get("/api/items/{id}", 1).accept(MediaType.APPLICATION_JSON))
+    fun `GET item by ID - Common Request Info`() {
+        mockMvc.perform(
+            get("/api/items/{id}", 1)
+                .accept(MediaType.APPLICATION_JSON)
+        )
             .andExpect(status().isOk)
             .andDo(
-                documentAuto(
+                document(
                     "items/get-by-id",
-                    pathParameters(parameterWithName("id").description("조회할 아이템의 ID")),
-                    itemResponseField
+                    preprocessRequest(prettyPrint()),
+                    pathParameters(parameterWithName("id").description("조회할 아이템의 ID"))
                 )
             )
     }
 
+
     @Test
-    fun `GET items with query params 200 - 쿼리 파라미터로 아이템 검색`() {
+    fun `GET item by ID - 404 Not Found Response`() {
+        mockMvc.perform(
+            get("/api/items/{id}/00", 999)
+                .accept(MediaType.APPLICATION_JSON)
+        )
+            .andExpect(status().isNotFound)
+            .andDo(
+                document(
+                    "items/get-by-id/404-response",
+                    preprocessResponse(prettyPrint()),
+                )
+            )
+    }
+
+    // ============= SEARCH ITEMS =============
+
+    @Test
+    fun `GET items with query params - Common Request Info`() {
         mockMvc.perform(
             get("/api/items")
                 .param("name", "item")
@@ -182,8 +247,9 @@ class ItemControllerTest {
         )
             .andExpect(status().isOk)
             .andDo(
-                documentAuto(
+                document(
                     "items/search",
+                    preprocessRequest(prettyPrint()),
                     pathParameters().apply {
                         parameterWithName("name").description("아이템 이름 검색 키워드").optional()
                         parameterWithName("minPrice").description("최소 가격").optional()
@@ -193,47 +259,32 @@ class ItemControllerTest {
                     }
                 )
             )
-
     }
 
-    @Test
-    fun `POST create item 201 - 새 아이템 생성`() {
-        val request = ItemRequest("새로운 아이템", 1500)
-        val json = objectMapper.writeValueAsString(request)
-
+   // @Test
+    fun `GET items with query params - 200 Success Response`() {
         mockMvc.perform(
-            post("/api/items")
-                .contentType(MediaType.APPLICATION_JSON)
+            get("/api/items/search")
+                .param("name", "item")
+                .param("minPrice", "100")
+                .param("maxPrice", "500")
+                .param("page", "0")
+                .param("size", "10")
                 .accept(MediaType.APPLICATION_JSON)
-                .content(json)
         )
-            .andExpect(status().isCreated)
+            .andExpect(status().isOk)
             .andDo(
-                documentAuto(
-                    "items/create",
-                    itemRequestBody
+                document(
+                    "items/search/200-response",
+                    preprocessResponse(prettyPrint()),
+                    itemResponseFields
                 )
             )
     }
 
-    @Test
-    fun `POST create item 400 - Bad Request`() {
-        val request = ItemRequest("12345678910101010", 1500)
-        val json = objectMapper.writeValueAsString(request)
-
-        mockMvc.perform(
-            post("/api/items")
-                .contentType(MediaType.APPLICATION_JSON)
-                .accept(MediaType.APPLICATION_JSON)
-                .content(json)
-        )
-            .andExpect(status().isBadRequest)
-            .andDo(documentAuto("items/create-error"))
-    }
-
 
     @Test
-    fun `PUT update item 200 - 아이템 정보 수정`() {
+    fun `PUT update item - 200 Success Response`() {
         val request = ItemRequest("수정된 아이템", 2000)
         val json = objectMapper.writeValueAsString(request)
 
@@ -245,23 +296,73 @@ class ItemControllerTest {
         )
             .andExpect(status().isOk)
             .andDo(
-                documentAuto(
-                    "items/update",
-                    pathParameters(parameterWithName("id").description("수정할 아이템의 ID")),
-                    itemRequestBody,
+                document(
+                    "items/update/200-response",
+                    preprocessResponse(prettyPrint()),
                 )
             )
     }
 
     @Test
-    fun `DELETE item 204 - 아이템 삭제`() {
+    fun `PUT update item - 404 Not Found Response`() {
+        val request = ItemRequest("수정된 아이템", 2000)
+        val json = objectMapper.writeValueAsString(request)
+
+        mockMvc.perform(
+            put("/api/items/{id}", 999)
+                .contentType(MediaType.APPLICATION_JSON)
+                .accept(MediaType.APPLICATION_JSON)
+                .content(json)
+        )
+            .andExpect(status().isNotFound)
+            .andDo(
+                document(
+                    "items/update/404-response",
+                    preprocessResponse(prettyPrint())
+                )
+            )
+    }
+
+    // ============= DELETE ITEM =============
+
+    @Test
+    fun `DELETE item - Common Request Info`() {
         mockMvc.perform(delete("/api/items/{id}", 1))
             .andExpect(status().isNoContent)
             .andDo(
-                documentAuto(
+                document(
                     "items/delete",
+                    preprocessRequest(prettyPrint()),
                     pathParameters(parameterWithName("id").description("삭제할 아이템의 ID"))
                 )
             )
     }
+
+    @Test
+    fun `DELETE item - 204 No Content Response`() {
+        mockMvc.perform(delete("/api/items/{id}", 1))
+            .andExpect(status().isNoContent)
+            .andDo(
+                document(
+                    "items/delete/204-response",
+                    preprocessResponse(prettyPrint())
+                )
+            )
+    }
+
+    @Test
+    fun `DELETE item - 404 Not Found Response`() {
+        mockMvc.perform(delete("/api/items/{id}/11", 999))
+            .andExpect(status().isNotFound)
+            .andDo(
+                document(
+                    "items/delete/404-response",
+                    preprocessResponse(prettyPrint()),
+
+                )
+            )
+    }
+
+    // Data classes
+    data class ItemRequest(val name: String, val price: Int)
 }

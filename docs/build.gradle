@@ -16,7 +16,6 @@ dependencies {
     asciidoctorExt 'org.springframework.restdocs:spring-restdocs-asciidoctor'
 }
 
-// 1단계: 스니펫 복사 및 index.adoc 생성
 tasks.register('prepareAsciidoc') {
     dependsOn ':adapter-inbound:test'
 
@@ -57,47 +56,101 @@ tasks.register('prepareAsciidoc') {
         snippetsRoot.listFiles()
                 ?.findAll { it.isDirectory() }
                 ?.each { categoryDir ->
-                    content << "=== ${categoryDir.name.capitalize()}\n\n"
+                    content << "=== ${formatName(categoryDir.name)}\n\n"
 
-                    // 각 카테고리 안의 서브 디렉토리들 처리
                     categoryDir.listFiles()
                             ?.findAll { it.isDirectory() }
                             ?.sort { it.name }
                             ?.each { apiDir ->
-                                content << "==== ${apiDir.name.capitalize()}\n\n"
+                                content << "==== ${formatName(apiDir.name)}\n\n"
 
-                                // 각 스니펫 파일들을 순서대로 포함
-                                def snippetOrder = [
-                                        'request-headers.adoc': 'Request headers',
-                                        'request-fields.adoc': 'Request body',
-                                        'path-parameters.adoc': 'Path Parameters',
-                                        'request-parameters.adoc': 'Request Parameters',
-                                        'curl-request.adoc': 'Request Example',
-                                        'http-response.adoc': 'Response Example',
-                                        'response-fields.adoc': 'Response fields',
-                                ]
+                                // 공통 요청 정보
+                                addCommonRequestInfo(content, categoryDir, apiDir)
 
-                                snippetOrder.each { fileName, title ->
-                                    def snippetFile = new File(apiDir, fileName)
-                                    if (snippetFile.exists()) {
-                                        content << "===== ${title}\n\n"
-                                        content << "include::{snippets}/${categoryDir.name}/${apiDir.name}/${fileName}[]\n\n"
-                                    }
-                                }
-                                 snippetOrder = [
-                                        'curl-request.adoc': 'Request Example',
-                                        'http-response.adoc': 'Response Example',
-                                        'response-fields.adoc': 'Response fields',
-                                ]
+                                // 응답을 탭으로 구성
+                                addResponseTabs(content, categoryDir, apiDir)
                             }
                     content << "\n"
                 }
 
         generatedIndex.parentFile.mkdirs()
         generatedIndex.text = content.toString()
-
-        println "Generated index.adoc with ${content.length()} characters"
+        println "Generated index.adoc"
     }
+}
+
+def addCommonRequestInfo(content, categoryDir, apiDir) {
+    def requestSnippets = [
+            'curl-request.adoc': 'Request Example',
+            'http-request.adoc': 'HTTP Request',
+            'request-fields.adoc': 'Request Fields',
+            'path-parameters.adoc': 'Path Parameters',
+            'request-parameters.adoc': 'Query Parameters'
+    ]
+
+    requestSnippets.each { fileName, title ->
+        def snippetFile = new File(apiDir, fileName)
+        if (snippetFile.exists()) {
+            content << "===== ${title}\n\n"
+            content << "include::{snippets}/${categoryDir.name}/${apiDir.name}/${fileName}[]\n\n"
+        }
+    }
+}
+
+def addResponseTabs(content, categoryDir, apiDir) {
+    // 응답 코드별 디렉토리 찾기 (201-response, 400-response 등)
+    def responseDirectories = apiDir.listFiles()
+            ?.findAll { it.isDirectory() && it.name.matches(/\d+-response/) }
+            ?.sort { it.name }
+
+    if (responseDirectories && !responseDirectories.isEmpty()) {
+        content << "===== Responses\n\n"
+        content << "[tabs]\n"
+        content << "====\n"
+
+        responseDirectories.each { responseDir ->
+            def statusCode = responseDir.name.replaceAll(/-response$/, '')
+            def statusText = getStatusText(statusCode)
+
+            content << "${statusCode} ${statusText}::\n"
+            content << "+\n"
+
+            // 각 응답 디렉토리 안의 스니펫들 포함
+            def responseFile = new File(responseDir, 'http-response.adoc')
+            if (responseFile.exists()) {
+                content << "include::{snippets}/${categoryDir.name}/${apiDir.name}/${responseDir.name}/http-response.adoc[]\n"
+            }
+
+            def fieldsFile = new File(responseDir, 'response-fields.adoc')
+            if (fieldsFile.exists()) {
+                content << "\n"
+                content << "include::{snippets}/${categoryDir.name}/${apiDir.name}/${responseDir.name}/response-fields.adoc[]\n"
+            }
+
+            content << "\n"
+        }
+
+        content << "====\n\n"
+    }
+}
+
+def getStatusText(String code) {
+    def statusTexts = [
+            '200': 'OK',
+            '201': 'Created',
+            '400': 'Bad Request',
+            '401': 'Unauthorized',
+            '404': 'Not Found',
+            '500': 'Internal Server Error'
+    ]
+    return statusTexts[code] ?: 'Unknown'
+}
+
+def formatName(String name) {
+    return name.replaceAll('-', ' ')
+            .split(' ')
+            .collect { it.capitalize() }
+            .join(' ')
 }
 // 2단계: HTML 생성
 tasks.register('generateDocs', AsciidoctorTask) {
