@@ -52,6 +52,10 @@ jobs:
 
           # 헤더 추가 (커스터마이징 가능)
           sed -i 's|<div id="swagger-ui"></div>|<div style="text-align:center; padding:20px;"><h1>🛍️ Item Management API</h1></div><div id="swagger-ui"></div>|g' deploy/index.html
+          
+          # YAML 다운로드 버튼 추가
+          cp docs/openapi.json deploy/openapi.yaml
+          sed -i '/<div id="swagger-ui"><\/div>/i <div style="text-align:right; margin:10px;"><a href="./openapi.yaml" download>📄 Download OpenAPI YAML</a></div>' deploy/index.html
 
           echo "✅ Swagger UI 설정 완료"
 
@@ -74,13 +78,6 @@ jobs:
           ## 📅 마지막 업데이트
           $(date)
           EOF
-
-      - name: List generated files
-        run: |
-          echo "📁 생성된 파일 목록:"
-          ls -la deploy/
-          echo ""
-          echo "📄 openapi.json 크기: $(wc -c < deploy/openapi.json) bytes"
 
       - name: Deploy to GitHub Pages
         uses: peaceiris/actions-gh-pages@v3
