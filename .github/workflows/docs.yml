@@ -1,0 +1,99 @@
+name: Generate Swagger UI Documentation
+
+on:
+  push:
+    branches: [main, develop]
+    paths:
+      - 'docs/openapi.json'   # openapi.json 변경시에만 실행
+  workflow_dispatch:          # 수동 실행도 가능
+
+jobs:
+  build-swagger-ui:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Verify openapi.json exists
+        run: |
+          if [ ! -f "docs/openapi.json" ]; then
+            echo "❌ docs/openapi.json 파일이 없습니다!"
+            exit 1
+          fi
+          echo "✅ openapi.json 파일 확인됨"
+
+      - name: Validate OpenAPI spec
+        run: |
+          pip install openapi-spec-validator
+          openapi-spec-validator docs/openapi.json
+          echo "✅ OpenAPI 스펙 유효성 검사 통과"
+
+      - name: Download Swagger UI (via npm)
+        run: |
+          echo "🔽 Swagger UI 설치 중..."
+          npm install swagger-ui-dist
+          mkdir -p deploy
+          cp -r node_modules/swagger-ui-dist/* deploy/
+          echo "✅ Swagger UI 설치 완료"
+
+      - name: Configure Swagger UI
+        run: |
+          echo "⚙️ Swagger UI 설정 중..."
+
+          # openapi.json 복사
+          cp docs/openapi.json deploy/
+
+          # swagger-initializer.js 수정 (기본 Petstore → 우리 API)
+          sed -i 's|https://petstore.swagger.io/v2/swagger.json|./openapi.json|g' deploy/swagger-initializer.js
+
+          # 페이지 제목 변경
+          sed -i 's|<title>Swagger UI</title>|<title>Item Management API</title>|g' deploy/index.html
+
+          # 헤더 추가 (커스터마이징 가능)
+          sed -i 's|<div id="swagger-ui"></div>|<div style="text-align:center; padding:20px;"><h1>🛍️ Item Management API</h1></div><div id="swagger-ui"></div>|g' deploy/index.html
+
+          echo "✅ Swagger UI 설정 완료"
+
+      - name: Create README
+        run: |
+          cat > deploy/README.md << EOF
+          # Item Management API Documentation
+          
+          이 페이지는 GitHub Actions를 통해 자동 생성됩니다.
+          
+          ## 📋 API 문서
+          - **Swagger UI**: [여기서 확인](https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/)
+          - **OpenAPI Spec**: [openapi.json](./openapi.json)
+          
+          ## 🔄 업데이트 방법
+          1. 로컬에서 \`docs/openapi.json\` 파일 생성
+          2. Git push
+          3. GitHub Actions가 자동으로 문서 생성 및 배포
+          
+          ## 📅 마지막 업데이트
+          $(date)
+          EOF
+
+      - name: List generated files
+        run: |
+          echo "📁 생성된 파일 목록:"
+          ls -la deploy/
+          echo ""
+          echo "📄 openapi.json 크기: $(wc -c < deploy/openapi.json) bytes"
+
+      - name: Deploy to GitHub Pages
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./deploy
+          commit_message: "🚀 Update API documentation from ${{ github.sha }}"
+
+      - name: Summary
+        run: |
+          echo "✅ 배포 완료!"
+          echo "📖 문서 URL: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/"
+          echo ""
+          echo "🔍 확인사항:"
+          echo "1. GitHub Repository → Settings → Pages에서 Source를 'gh-pages' 브랜치로 설정"
+          echo "2. 약 1-2분 후 문서 접근 가능"
