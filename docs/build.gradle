@@ -44,9 +44,12 @@ tasks.register('prepareAsciidoc') {
         // index.adoc 생성
         def content = new StringBuilder()
         content << "= API Documentation\n"
+        content << ":dotype: book\n"
+        content << ":icons: font\n"
+        content << ":source-highlighter: highlightjs\n"
         content << ":toc: left\n"
-        content << ":toclevels: 3\n"
-        content << ":sectnums:\n"
+        content << ":toclevels: 5\n"
+        content << ":sectlinks:\n"
         content << ":backend: html5\n\n"
         content << "== API Reference\n\n"
 
@@ -65,12 +68,13 @@ tasks.register('prepareAsciidoc') {
 
                                 // 각 스니펫 파일들을 순서대로 포함
                                 def snippetOrder = [
-                                        'curl-request.adoc': 'Curl Request',
                                         'request-headers.adoc': 'Request headers',
                                         'request-fields.adoc': 'Request body',
                                         'path-parameters.adoc': 'Path Parameters',
                                         'request-parameters.adoc': 'Request Parameters',
-                                        'http-response.adoc': 'HTTP Response',
+                                        'curl-request.adoc': 'Request Example',
+                                        'http-response.adoc': 'Response Example',
+                                        'response-fields.adoc': 'Response fields',
                                 ]
 
                                 snippetOrder.each { fileName, title ->
@@ -80,6 +84,11 @@ tasks.register('prepareAsciidoc') {
                                         content << "include::{snippets}/${categoryDir.name}/${apiDir.name}/${fileName}[]\n\n"
                                     }
                                 }
+                                 snippetOrder = [
+                                        'curl-request.adoc': 'Request Example',
+                                        'http-response.adoc': 'Response Example',
+                                        'response-fields.adoc': 'Response fields',
+                                ]
                             }
                     content << "\n"
                 }
